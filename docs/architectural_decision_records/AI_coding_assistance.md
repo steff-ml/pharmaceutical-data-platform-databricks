@@ -1,34 +1,42 @@
-# Architectural Decision Record documentation
-This document is based on the famous post  on ADR by Michael Nygard. I will hold of on using tools for maintaining ADRs for now, since I don't see an added value for them at this point in time. 
-URL: https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions
-ADR tools: https://github.com/npryce/adr-tools?tab=readme-ov-file
+# AI coding assistance decision record
 
-Below is a copied, but modified version.
 ## Date
 2026-04-11
+
 ## Author
 Steff Horemans 
 
 ## Context
-Architecture for agile projects has to be described and defined differently. Not all decisions will be made at once, nor will all of them be done when the project begins.
+AI assistants hold great promise to accelerate the completion of coding tasks, but they have also presented unique challenges.
+- Actual productivity impact results on coding/highly skilled work are mixed:
+    - This study report significantly higher productivity, specifically for people who are less experienced or under a high workload: https://arxiv.org/pdf/2302.06590
+    - This study reported experienced developers being slower, but perceiving themselves as faster: https://arxiv.org/pdf/2507.09089
+    - This report presents the most comprehensive study in the wild ans shows 10%-30% increase in developer effectiveness: https://economics.mit.edu/sites/default/files/inline-files/draft_copilot_experiments.pdf
+    - Since the field is moving fast, it is difficult to assess how true these assessments remain at subsequent model releases. However, it seems that they do help with automating grunt work, which is in line with personal experience
 
-Agile methods are not opposed to documentation, only to valueless documentation. Documents that assist the team itself can have value, but only if they are kept up to date. Large documents are never kept up to date. Small, modular documents have at least a chance at being updated.
+- Reliance on AI coding tools seems to be causing cognitive atrophy and skill degradation:
+    - This paper suggests that AI assistance can degrade the development of coding skills, especially if they were used for delegation rather than explanation. It contains AI interaction patterns that preserve learning: https://arxiv.org/html/2601.20245v1
+    - This paper suggests that higher confidence in AI versus own skills leads to less critical thinking and being unprepared to handle exceptions when they do arise: https://www.microsoft.com/en-us/research/wp-content/uploads/2025/01/lee_2025_ai_critical_thinking_survey.pdf
+    - This paper also suggests that AI use can cause skill erosion (especially with automation and offloading of reasoning) and that AI leads people to feel that tasks are easier, which causes them to overestimate their abilities: https://pmc.ncbi.nlm.nih.gov/articles/PMC11239631/
+    - This paper discusses how to manage cognitive atrophy effectively, but requires a deeper read: https://www.mdpi.com/2078-2489/16/11/1009
 
-Nobody ever reads large documents, either. Most developers have been on at least one project where the specification document was larger (in bytes) than the total source code size. Those documents are too large to open, read, or update. Bite sized pieces are easier for for all stakeholders to consume.
+-Burnout, Stress and Job Meaning:
+    - This survey by Atlassian suggests that AI saves developers significant time, which they proceed to lose due to organizational inefficiencies and also mentions a growing empathy gap between developers and their managers: https://www.atlassian.com/blog/developer/developer-experience-report-2025  
+    - This survey of developers  suggest frustrations with fixing "almost right AI code": https://survey.stackoverflow.co/2025/ai/
+    - Employment of early-career tech workers has started to decline: https://digitaleconomy.stanford.edu/app/uploads/2025/11/CanariesintheCoalMine_Nov25.pdf https://spectrum.ieee.org/ai-effect-entry-level-jobs
+    - This Github blog traces the evolution of a low-trust user of AI to a high level user of AI as a strategist. https://github.blog/news-insights/octoverse/the-new-identity-of-a-developer-what-changes-and-what-doesnt-in-the-ai-era/
+    - Steve Yegge (writer of the Vibe Coding book on this topic) describes severe exhaustion caused by high agentic use: https://steve-yegge.medium.com/the-ai-vampire-eda6e4f07163
 
-One of the hardest things to track during the life of a project is the motivation behind certain decisions. A new person coming on to a project may be perplexed, baffled, delighted, or infuriated by some past decision. Without understanding the rationale or consequences, this person has only two choices:
-
-- Blindly accept the decision.
-
-This response may be OK, if the decision is still valid. It may not be good, however, if the context has changed and the decision should really be revisited. If the project accumulates too many decisions accepted without understanding, then the development team becomes afraid to change anything and the project collapses under its own weight.
-
-- Blindly change it.
-
-Again, this may be OK if the decision needs to be reversed. On the other hand, changing the decision without understanding its motivation or consequences could mean damaging the project's overall value without realizing it. (E.g., the decision supported a non-functional requirement that hasn't been tested yet.)
-
-It's better to avoid either blind acceptance or blind reversal.
+This is only a start of the challenges, which also include quality and security issues due to hallucinations.
 
 ## Decision
+Given this early evidence, I have decided to start by playing it safe. I use the Anthropic AI fluency Framework to systematically frame my thinking on effective AI use: https://aifluencyframework.org/
+
+### Delegation
+
+### Description
+### Discernment
+### Diligence
 We will keep a collection of records for "architecturally significant" decisions: those that affect the structure, non-functional characteristics, dependencies, interfaces, or construction techniques.
 
 An architecture decision record is a short text file in a format similar to an Alexandrian pattern. (Though the decisions themselves are not necessarily patterns, they share the characteristic balancing of forces.) Each record describes a set of forces and a single decision in response to those forces. Note that the decision is the central piece here, so specific forces may appear in multiple ADRs.
@@ -71,4 +79,3 @@ The motivation behind previous decisions is visible for everyone, present and fu
 
 ## Version
 1
-

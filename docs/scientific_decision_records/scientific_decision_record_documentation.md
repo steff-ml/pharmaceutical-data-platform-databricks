@@ -3,9 +3,27 @@ This document is based on the famous post  on ADR by Michael Nygard. I will hold
 URL: https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions
 ADR tools: https://github.com/npryce/adr-tools?tab=readme-ov-file
 
+## Date
+2026-04-11
+
+## Author
+Steff Horemans 
 
 ## Context
-
+https://pmc.ncbi.nlm.nih.gov/articles/PMC11239631/
+https://www.mdpi.com/2075-4698/15/1/6
+https://pmc.ncbi.nlm.nih.gov/articles/PMC11020077/
+https://pmc.ncbi.nlm.nih.gov/articles/PMC12036037/
+https://www.frontiersin.org/journals/education/articles/10.3389/feduc.2025.1711718/full
+https://pmc.ncbi.nlm.nih.gov/articles/PMC12515416/
+https://pmc.ncbi.nlm.nih.gov/articles/PMC12170296/
+https://retractionwatch.com/2025/02/10/as-springer-nature-journal-clears-ai-papers-one-universitys-retractions-rise-drastically/
+https://ukrio.org/wp-content/uploads/Embracing-AI-with-integrity.pdf
+https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4375283
+https://pmc.ncbi.nlm.nih.gov/articles/PMC12245043/
+https://pmc.ncbi.nlm.nih.gov/articles/PMC12569468/
+https://arxiv.org/abs/2510.07435
+Standout finding for your ADR context: Hao et al. is the most striking — AI makes individual researchers dramatically more productive by conventional metrics (papers, citations), but simultaneously contracts the collective diversity of science. That's a direct analog to the software finding that AI expands throughput metrics while degrading code quality and developer dept
 Architectural Decision Records are used in Agile software development to solve several problems:
 - Not all decisions will be made at once, nor will all of them be done when the project begins.
 - Nobody ever reads large documents, either.
