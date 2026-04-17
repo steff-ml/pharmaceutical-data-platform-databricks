@@ -15,7 +15,9 @@
       "WebFetch(domain:www.frontiersin.org)",
       "WebFetch(domain:gptzero.me)",
       "WebFetch(domain:ukrio.org)",
-      "WebFetch(domain:www.tandfonline.com)"
+      "WebFetch(domain:www.tandfonline.com)",
+      "WebFetch(domain:www.databricks.com)",
+      "WebFetch(domain:docs.databricks.com)"
     ]
   }
 }
