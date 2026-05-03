@@ -72,7 +72,7 @@ if [[ ! -f "$AGENT_FILE" ]]; then
 fi
 
 # Strip YAML frontmatter, keep body
-SYSTEM_PROMPT=$(awk '/^---/{p++; next} p==2{print}' "$AGENT_FILE")
+SYSTEM_PROMPT=$(awk 'BEGIN{p=0} /^---/{p++; if(p==2){found=1}; next} found{print}' "$AGENT_FILE" | tr -d '\r')
 echo "[changelog DEBUG] SYSTEM_PROMPT length: ${#SYSTEM_PROMPT}"
 
 # ── Build input payload via temp files ───────────────────────
