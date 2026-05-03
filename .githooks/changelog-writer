@@ -76,10 +76,9 @@ SYSTEM_PROMPT=$(awk '/^---/{p++; next} p==2{print}' "$AGENT_FILE")
 
 # ── Build input payload via temp files ───────────────────────
 # Use TMPDIR — works on Windows Git Bash unlike /tmp
-TMPBASE="${TMPDIR:-/tmp}"
-INPUT_FILE=$(mktemp "${TMPBASE}/changelog_input_XXXXXX.txt")
-SYSTEM_FILE=$(mktemp "${TMPBASE}/changelog_system_XXXXXX.txt")
-TEMP_CHANGELOG=$(mktemp "${TMPBASE}/changelog_XXXXXX.md")
+INPUT_FILE=$(mktemp /tmp/changelog_input_XXXXXX.txt)
+SYSTEM_FILE=$(mktemp /tmp/changelog_system_XXXXXX.txt)
+TEMP_CHANGELOG=$(mktemp /tmp/changelog_XXXXXX.md)
 trap 'rm -f "$TEMP_CHANGELOG" "$INPUT_FILE" "$SYSTEM_FILE"' EXIT
 
 
