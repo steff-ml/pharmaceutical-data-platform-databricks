@@ -172,11 +172,6 @@ else
   echo "No tests/ directory found"
   echo "EXIT:-1"
 fi
-  else              # ← this is a leftover duplicate — delete from here
-    echo "No tests/ directory found"
-    echo "EXIT:-1"
-  fi                # ← to here
-
 } > "$TOOLS_FILE" 2>&1
 # These must be OUTSIDE the {} block to print to terminal
 log "Diff file: ${DIFF_FILE} ($(wc -l < "$DIFF_FILE") lines)"
