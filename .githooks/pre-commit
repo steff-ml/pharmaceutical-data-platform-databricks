@@ -49,6 +49,10 @@ else
   warn "Virtual environment not found at $VENV_PATH"
 fi
 
+export PATH="${VENV_PATH}:${PATH}"
+hash -r  # force bash to rehash its command cache
+
+
 # Safely capture tool output — never fail the hook if a tool is missing
 run_tool() {
   local name="$1"; shift
@@ -66,10 +70,18 @@ run_tool() {
 }
 # ── Dependency check ──────────────────────────────────────────
 MISSING_DEPS=()
-for dep in jq claude ruff mypy bandit interrogate pytest; do
-  if ! command -v "$dep" &>/dev/null && \
-     ! command -v "${dep}.exe" &>/dev/null && \
-     ! which "$dep" &>/dev/null; then
+
+# Check Python tools directly in venv — bypasses PATH resolution issues
+for dep in ruff mypy bandit interrogate pytest; do
+  if [[ ! -f "${VENV_PATH}/${dep}.exe" ]] && \
+     [[ ! -f "${VENV_PATH}/${dep}" ]]; then
+    MISSING_DEPS+=("$dep")
+  fi
+done
+
+# Check jq and claude separately — these are system tools not in venv
+for dep in jq claude; do
+  if ! which "$dep" &>/dev/null 2>&1; then
     MISSING_DEPS+=("$dep")
   fi
 done
