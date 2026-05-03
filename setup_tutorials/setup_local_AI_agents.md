@@ -1,4 +1,4 @@
-# Setup Local AI
+# Setup (Local) AI
 
 ## Retrieving and using models using Ollama
 Purpose: Ollama allows you to host your own local LLM's. Interestingly, they also offer competing subscriptions for hosting cloud LLM's, which might be interesting if we want to kick out Claude entirely, but keep on using high performing models.
@@ -168,3 +168,9 @@ opencode: command not found — Run source ~/.bashrc if in WSL, or reopen PowerS
 Model not found / API connection error — Check Ollama is running (ollama list in PowerShell). Verify OLLAMA_HOST is set to 0.0.0.0 and Ollama was restarted after setting it.
 Agent thinks but doesn't act — The model's context window is too small. Recreate your custom model with a higher num_ctx value.
 TUI not responding — Switch to Windows Terminal. The default WSL or PowerShell console has limited TUI support.
+
+## Installing support agents
+
+### Review agents (Claude Code)
+
+

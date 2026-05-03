@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit
+# ─────────────────────────────────────────────────────────────
+# Pre-commit hook: runs static analysis tools + Claude code review
+# on staged Python files, writes report to .reviews/last-review.md
+#
+# Setup (run once):
+#   git config core.hooksPath .githooks
+#   chmod +x .githooks/pre-commit
+#
+# Dependencies: ruff, mypy, pytest, bandit, interrogate, jq, claude
+# Install:  pip install ruff mypy pytest bandit interrogate
+# ─────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+# ── Config ────────────────────────────────────────────────────
+DIFF_WARN_THRESHOLD=400
+DIFF_SKIP_THRESHOLD=800
+REVIEWS_DIR=".reviews"
+REPORT_FILE="${REVIEWS_DIR}/last-review.md"
+ARCH_REPORT_FILE="${REVIEWS_DIR}/last-arch-review.md"
+CLAUDE_AGENT="de-code-reviewer"
+CLAUDE_ARCH_AGENT="de-arch-reviewer"
+TIMEOUT_SECONDS=120
+
+# Colours
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# ── Helpers ───────────────────────────────────────────────────
+log()  { echo -e "${BLUE}[review]${NC} $*"; }
+warn() { echo -e "${YELLOW}[review]${NC} $*"; }
+ok()   { echo -e "${GREEN}[review]${NC} $*"; }
+
+# Safely capture tool output — never fail the hook if a tool is missing
+run_tool() {
+  local name="$1"; shift
+  local output returncode
+
+  if ! command -v "$1" &>/dev/null; then
+    echo "{\"returncode\": -1, \"output\": \"$name not installed — skipped\"}"
+    return
+  fi
+
+  output=$(timeout 60 "$@" 2>&1) && returncode=0 || returncode=$?
+  # Escape for JSON: backslashes, then double-quotes, then newlines
+  output=$(echo "$output" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}')
+  echo "{\"returncode\": ${returncode}, \"output\": \"${output}\"}"
+}
+
+# ── Gather staged Python files ────────────────────────────────
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+
+if [[ -z "$STAGED_PY" ]]; then
+  ok "No Python files staged — skipping review."
+  exit 0
+fi
+
+log "Staged Python files:"
+echo "$STAGED_PY" | sed 's/^/  /'
+
+# ── Diff size check ───────────────────────────────────────────
+DIFF_LINES=$(git diff --cached -- $(echo "$STAGED_PY") | wc -l | tr -d ' ')
+log "Diff size: ${DIFF_LINES} lines"
+
+if (( DIFF_LINES > DIFF_SKIP_THRESHOLD )); then
+  warn "Diff exceeds ${DIFF_SKIP_THRESHOLD} lines — skipping Claude review, running tools only."
+  SKIP_CLAUDE=true
+else
+  SKIP_CLAUDE=false
+  if (( DIFF_LINES > DIFF_WARN_THRESHOLD )); then
+    warn "Large diff (${DIFF_LINES} lines) — consider breaking into smaller commits."
+  fi
+fi
+
+# ── Run static analysis tools ─────────────────────────────────
+log "Running ruff..."
+RUFF_RESULT=$(run_tool "ruff" ruff check --output-format=concise $(echo "$STAGED_PY"))
+
+log "Running mypy..."
+MYPY_RESULT=$(run_tool "mypy" mypy --ignore-missing-imports --no-error-summary $(echo "$STAGED_PY"))
+
+log "Running bandit..."
+BANDIT_RESULT=$(run_tool "bandit" bandit -r -ll -q $(echo "$STAGED_PY"))
+
+log "Running interrogate..."
+INTERROGATE_RESULT=$(run_tool "interrogate" interrogate --fail-under=70 $(echo "$STAGED_PY"))
+
+# pytest: run full suite, not just staged files
+log "Running pytest..."
+if [[ -d "tests" ]]; then
+  PYTEST_RESULT=$(run_tool "pytest" pytest tests/ -q --tb=short --no-header)
+else
+  PYTEST_RESULT='{"returncode": -1, "output": "No tests/ directory found"}'
+fi
+
+# ── Build JSON payload ────────────────────────────────────────
+STAGED_JSON=$(echo "$STAGED_PY" | jq -R . | jq -s .)
+DIFF_CONTENT=$(git diff --cached -- $(echo "$STAGED_PY") | \
+  sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}')
+REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+PAYLOAD=$(cat <<EOF
+{
+  "diff": "${DIFF_CONTENT}",
+  "diff_lines": ${DIFF_LINES},
+  "staged_files": ${STAGED_JSON},
+  "tool_results": {
+    "ruff":        ${RUFF_RESULT},
+    "mypy":        ${MYPY_RESULT},
+    "pytest":      ${PYTEST_RESULT},
+    "bandit":      ${BANDIT_RESULT},
+    "interrogate": ${INTERROGATE_RESULT}
+  },
+  "repo": {
+    "name": "${REPO_NAME}",
+    "branch": "${BRANCH}"
+  }
+}
+EOF
+)
+
+# ── Run Claude review ─────────────────────────────────────────
+mkdir -p "$REVIEWS_DIR"
+
+if [[ "$SKIP_CLAUDE" == "true" ]]; then
+  cat > "$REPORT_FILE" <<EOF
+# Code Review — ${BRANCH} @ $(date '+%Y-%m-%d %H:%M')
+
+> ⚠️ Diff too large (${DIFF_LINES} lines) — Claude review skipped. Tools ran only.
+> Consider breaking this commit into smaller, focused changes.
+
+## Tool Results
+See terminal output above for tool results.
+
+> Commit allowed. Review is advisory only.
+EOF
+  ok "Tools complete. Claude review skipped (diff too large)."
+else
+  log "Running Claude review (agent: ${CLAUDE_AGENT})..."
+
+  if ! command -v claude &>/dev/null; then
+    warn "claude CLI not found — skipping AI review."
+    echo "> Claude CLI not available. Install Claude Code to enable AI review." > "$REPORT_FILE"
+  else
+    REVIEW=$(echo "$PAYLOAD" | \
+      timeout "$TIMEOUT_SECONDS" claude --agent "$CLAUDE_AGENT" --print \
+      "Review this code change and produce the report as specified in your instructions." \
+      2>/dev/null) || {
+        warn "Claude review timed out or failed — commit proceeding anyway."
+        echo "> Claude review failed. Tools ran successfully." > "$REPORT_FILE"
+      }
+
+    if [[ -n "${REVIEW:-}" ]]; then
+      echo "$REVIEW" > "$REPORT_FILE"
+    fi
+  fi
+fi
+
+# ── Print report to terminal ──────────────────────────────────
+if [[ -f "$REPORT_FILE" ]]; then
+  echo ""
+  echo "──────────────────────────────────────────────"
+  cat "$REPORT_FILE"
+  echo "──────────────────────────────────────────────"
+  echo ""
+  ok "Full report saved to ${REPORT_FILE}"
+fi
+
+# ── Run arch review on large diffs ───────────────────────────
+if (( DIFF_LINES > DIFF_WARN_THRESHOLD )) && [[ "$SKIP_CLAUDE" == "false" ]]; then
+  log "Large diff detected — also running architecture review..."
+
+  if command -v claude &>/dev/null; then
+    ARCH_REVIEW=$(echo "$PAYLOAD" | \
+      timeout "$TIMEOUT_SECONDS" claude --agent "$CLAUDE_ARCH_AGENT" --print \
+      "Review this code change for architectural and maintainability issues." \
+      2>/dev/null) || {
+        warn "Architecture review timed out or failed — skipping."
+      }
+
+    if [[ -n "${ARCH_REVIEW:-}" ]]; then
+      echo "$ARCH_REVIEW" > "$ARCH_REPORT_FILE"
+      echo ""
+      echo "──────────────────────────────────────────────"
+      cat "$ARCH_REPORT_FILE"
+      echo "──────────────────────────────────────────────"
+      ok "Architecture report saved to ${ARCH_REPORT_FILE}"
+    fi
+  fi
+fi
+
+# ── Always allow commit ───────────────────────────────────────
+# Hook is warning-only. Remove the exit 0 and add logic here
+# if you later want blocking behaviour on CRITICAL issues.
+exit 0
