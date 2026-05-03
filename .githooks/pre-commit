@@ -51,7 +51,23 @@ run_tool() {
   output=$(echo "$output" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}')
   echo "{\"returncode\": ${returncode}, \"output\": \"${output}\"}"
 }
+# ── Dependency check ──────────────────────────────────────────
+MISSING_DEPS=()
+for dep in jq claude ruff mypy bandit interrogate pytest; do
+  if ! command -v "$dep" &>/dev/null; then
+    MISSING_DEPS+=("$dep")
+  fi
+done
 
+if [[ ${#MISSING_DEPS[@]} -gt 0 ]]; then
+  warn "Missing dependencies: ${MISSING_DEPS[*]}"
+  warn "Install with:"
+  warn "  jq:                winget install jqlang.jq"
+  warn "  Python tools:      pip install ruff mypy bandit interrogate pytest"
+  warn "  claude:            See https://claude.ai/code"
+  warn "Skipping review — commit proceeding anyway."
+  exit 0
+fi
 # ── Gather staged Python files ────────────────────────────────
 STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
 
