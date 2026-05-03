@@ -98,6 +98,11 @@ fi
 # ── Gather staged Python files ────────────────────────────────
 STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
 
+# Fallback for VS Code which may commit without explicit staging
+if [[ -z "$STAGED_PY" ]]; then
+  STAGED_PY=$(git diff HEAD --name-only --diff-filter=ACM 2>/dev/null | grep '\.py$' || true)
+fi
+
 if [[ -z "$STAGED_PY" ]]; then
   ok "No Python files staged — skipping review."
   exit 0
