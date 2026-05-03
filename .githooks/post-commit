@@ -40,17 +40,27 @@ warn() { echo -e "${YELLOW}[review]${NC} $*"; }
 ok()   { echo -e "${GREEN}[review]${NC} $*"; }
 
 # ── Virtual environment activation ───────────────────────────
+# Use the git repo root — works regardless of which shell VS Code uses
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 VENV_PATH="${REPO_ROOT}/.venv/Scripts"
 
+# Convert to Windows-style path for Git Bash running under VS Code
+# VS Code on Windows may pass a different USERPROFILE/HOME
 if [[ -d "$VENV_PATH" ]]; then
   export PATH="${VENV_PATH}:${PATH}"
   hash -r
-  log "Virtual environment activated"
+  log "Virtual environment activated: ${VENV_PATH}"
+elif [[ -d "${REPO_ROOT}/.venv/bin" ]]; then
+  # Unix-style venv (WSL or Linux)
+  export PATH="${REPO_ROOT}/.venv/bin:${PATH}"
+  hash -r
+  log "Virtual environment activated (unix): ${REPO_ROOT}/.venv/bin"
 else
-  warn "No .venv found at repo root — tools may not be available"
+  warn "No .venv found at ${REPO_ROOT} — tools may not be available"
+  warn "REPO_ROOT=${REPO_ROOT}"
 fi
 
+log "PATH contains: $(echo $PATH | tr ':' '\n' | grep -i venv || echo 'no venv in PATH')"
 # ── Dependency check ──────────────────────────────────────────
 MISSING_DEPS=()
 
@@ -121,6 +131,11 @@ fi
 
 # ── Run static analysis tools ─────────────────────────────────
 # Write tool results to a plain text file — no JSON escaping needed
+RUFF="${VENV_PATH}/ruff.exe"
+MYPY="${VENV_PATH}/mypy.exe"
+BANDIT="${VENV_PATH}/bandit.exe"
+INTERROGATE="${VENV_PATH}/interrogate.exe"
+PYTEST="${VENV_PATH}/pytest.exe"
 
 {
   echo "=== BRANCH ==="
@@ -133,35 +148,34 @@ fi
   echo "$DIFF_LINES"
 
   echo "=== RUFF ==="
-  log "Running ruff..."
-  ruff check --output-format=concise $(echo "$COMMITTED_PY") 2>&1 \
-    && echo "EXIT:0" || echo "EXIT:$?"
+"$RUFF" check --output-format=concise $(echo "$COMMITTED_PY") 2>&1 \
+  && echo "EXIT:0" || echo "EXIT:$?"
 
-  echo "=== MYPY ==="
-  log "Running mypy..."
-  mypy --ignore-missing-imports --no-error-summary \
-    $(echo "$COMMITTED_PY") 2>&1 \
-    && echo "EXIT:0" || echo "EXIT:$?"
+echo "=== MYPY ==="
+"$MYPY" --ignore-missing-imports --no-error-summary \
+  $(echo "$COMMITTED_PY") 2>&1 \
+  && echo "EXIT:0" || echo "EXIT:$?"
 
-  echo "=== BANDIT ==="
-  log "Running bandit..."
-  bandit -r -ll -q $(echo "$COMMITTED_PY") 2>&1 \
-    && echo "EXIT:0" || echo "EXIT:$?"
+echo "=== BANDIT ==="
+"$BANDIT" -r -ll -q $(echo "$COMMITTED_PY") 2>&1 \
+  && echo "EXIT:0" || echo "EXIT:$?"
 
-  echo "=== INTERROGATE ==="
-  log "Running interrogate..."
-  interrogate --fail-under=70 $(echo "$COMMITTED_PY") 2>&1 \
-    && echo "EXIT:0" || echo "EXIT:$?"
+echo "=== INTERROGATE ==="
+"$INTERROGATE" --fail-under=70 $(echo "$COMMITTED_PY") 2>&1 \
+  && echo "EXIT:0" || echo "EXIT:$?"
 
-  echo "=== PYTEST ==="
-  log "Running pytest..."
-  if [[ -d "tests" ]]; then
-    pytest tests/ -q --tb=short --no-header 2>&1 \
-      && echo "EXIT:0" || echo "EXIT:$?"
-  else
+echo "=== PYTEST ==="
+if [[ -d "tests" ]]; then
+  "$PYTEST" tests/ -q --tb=short --no-header 2>&1 \
+    && echo "EXIT:0" || echo "EXIT:$?"
+else
+  echo "No tests/ directory found"
+  echo "EXIT:-1"
+fi
+  else              # ← this is a leftover duplicate — delete from here
     echo "No tests/ directory found"
     echo "EXIT:-1"
-  fi
+  fi                # ← to here
 
 } > "$TOOLS_FILE" 2>&1
 # These must be OUTSIDE the {} block to print to terminal
