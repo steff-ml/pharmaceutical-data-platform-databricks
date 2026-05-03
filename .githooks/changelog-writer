@@ -29,7 +29,9 @@ warn() { echo -e "${YELLOW}[changelog]${NC} $*"; }
 ok()   { echo -e "${GREEN}[changelog]${NC} $*"; }
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+PYTHON="${REPO_ROOT}/.venv/Scripts/python.exe"
 cd "$REPO_ROOT"
+
 
 # ── Check Ollama is running ───────────────────────────────────
 if ! curl -s --max-time 3 "$OLLAMA_URL" > /dev/null 2>&1; then
@@ -98,8 +100,8 @@ RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
   -H "Content-Type: application/json" \
   -d "{
     \"model\": \"${OLLAMA_MODEL}\",
-    \"system\": $(echo "$SYSTEM_PROMPT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
-    \"prompt\": $(echo "$INPUT_TEXT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+\"system\": $(echo "$SYSTEM_PROMPT" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+\"prompt\": $(echo "$INPUT_TEXT" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
     \"stream\": false,
     \"options\": {
       \"temperature\": 0.3,
@@ -111,7 +113,7 @@ RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
   }
 
 # Extract the response text
-ENTRY=$(echo "$RESPONSE" | python3 -c "
+ENTRY=$(echo "$RESPONSE" | "$PYTHON" -c "
 import json, sys
 try:
     data = json.load(sys.stdin)

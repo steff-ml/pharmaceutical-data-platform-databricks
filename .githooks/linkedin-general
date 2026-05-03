@@ -41,6 +41,7 @@ warn() { echo -e "${YELLOW}[linkedin-general]${NC} $*"; }
 ok()   { echo -e "${GREEN}[linkedin-general]${NC} $*"; }
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+PYTHON="${REPO_ROOT}/.venv/Scripts/python.exe"
 cd "$REPO_ROOT"
 
 # ── Checks ────────────────────────────────────────────────────
@@ -67,12 +68,12 @@ if [[ "$USE_ALL" == "true" ]]; then
 else
   CUTOFF_DATE=$(date -d "-${DAYS} days" '+%Y-%m-%d' 2>/dev/null || \
     date -v-${DAYS}d '+%Y-%m-%d' 2>/dev/null || \
-    python3 -c "from datetime import datetime, timedelta; print((datetime.now()-timedelta(days=${DAYS})).strftime('%Y-%m-%d'))")
+    "$PYTHON" -c "from datetime import datetime, timedelta; print((datetime.now()-timedelta(days=${DAYS})).strftime('%Y-%m-%d'))")
 
   log "Using changelog entries since ${CUTOFF_DATE}"
 
   # Extract entries — each entry ends with a line containing only "---"
-  CHANGELOG_CONTENT=$(python3 - <<EOF
+  CHANGELOG_CONTENT=$("$PYTHON" -c - <<EOF
 import re, sys
 with open("${CHANGELOG_FILE}") as f:
     content = f.read()
@@ -108,8 +109,8 @@ RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
   -H "Content-Type: application/json" \
   -d "{
     \"model\": \"${OLLAMA_MODEL}\",
-    \"system\": $(echo "$SYSTEM_PROMPT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
-    \"prompt\": $(echo "Write a general audience LinkedIn post based on these changelog entries:\n\n${CHANGELOG_CONTENT}" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+    \"system\": $(echo "$SYSTEM_PROMPT" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+    \"prompt\": $(echo "Write a general audience LinkedIn post based on these changelog entries:\n\n${CHANGELOG_CONTENT}" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
     \"stream\": false,
     \"options\": {
       \"temperature\": 0.7,
@@ -120,7 +121,7 @@ RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
     exit 1
   }
 
-POST=$(echo "$RESPONSE" | python3 -c "
+POST=$(echo "$RESPONSE" | "$PYTHON" -c "
 import json, sys
 try:
     data = json.load(sys.stdin)

@@ -44,6 +44,7 @@ warn() { echo -e "${YELLOW}[linkedin-technical]${NC} $*"; }
 ok()   { echo -e "${GREEN}[linkedin-technical]${NC} $*"; }
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+PYTHON="${REPO_ROOT}/.venv/Scripts/python.exe"
 cd "$REPO_ROOT"
 
 # ── Checks ────────────────────────────────────────────────────
@@ -64,7 +65,7 @@ if [[ ! -f "$AGENT_FILE" ]]; then
 fi
 
 # ── Filter changelog ──────────────────────────────────────────
-CHANGELOG_CONTENT=$(python3 - <<EOF
+CHANGELOG_CONTENT=$("$PYTHON" -c - <<EOF
 import re
 from datetime import datetime, timedelta
 
@@ -120,8 +121,8 @@ RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
   -H "Content-Type: application/json" \
   -d "{
     \"model\": \"${OLLAMA_MODEL}\",
-    \"system\": $(echo "$SYSTEM_PROMPT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
-    \"prompt\": $(echo "Write a technical LinkedIn post based on these changelog entries:\n\n${CHANGELOG_CONTENT}" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+    \"system\": $(echo "$SYSTEM_PROMPT" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+    \"prompt\": $(echo "Write a technical LinkedIn post based on these changelog entries:\n\n${CHANGELOG_CONTENT}" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
     \"stream\": false,
     \"options\": {
       \"temperature\": 0.5,
@@ -132,7 +133,7 @@ RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
     exit 1
   }
 
-POST=$(echo "$RESPONSE" | python3 -c "
+POST=$(echo "$RESPONSE" | "$PYTHON" -c "
 import json, sys
 try:
     data = json.load(sys.stdin)

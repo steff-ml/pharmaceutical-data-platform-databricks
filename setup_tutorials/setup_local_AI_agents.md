@@ -197,3 +197,13 @@ bash .githooks/linkedin-technical --category Infrastructure  # filter by type
 bash .githooks/linkedin-technical --days 7   # last 7 days only
 
 ```
+```bash
+# Make a change to test_review.py
+echo "# test changelog writer" >> test_review.py
+
+# Stage it
+git add test_review.py
+
+# Commit with a proper prefix so changelog writer doesn't skip it
+git commit -m "feat: test changelog and review pipeline"
+```
