@@ -73,6 +73,7 @@ fi
 
 # Strip YAML frontmatter, keep body
 SYSTEM_PROMPT=$(awk '/^---/{p++; next} p==2{print}' "$AGENT_FILE")
+echo "[changelog DEBUG] SYSTEM_PROMPT length: ${#SYSTEM_PROMPT}"
 
 # ── Build input payload via temp files ───────────────────────
 # Use TMPDIR — works on Windows Git Bash unlike /tmp
@@ -103,6 +104,7 @@ echo "[changelog DEBUG] Python sees tmp as: $("$PYTHON" -c "import tempfile; pri
 echo "[changelog DEBUG] File exists in bash: $(test -f "$SYSTEM_FILE" && echo YES || echo NO)"
 
 echo "$SYSTEM_PROMPT" > "$SYSTEM_FILE"
+echo "[changelog DEBUG] SYSTEM_FILE contents: $(head -3 "$SYSTEM_FILE")"
 cat > "$INPUT_FILE" <<EOF
 === COMMIT HASH ===
 ${COMMIT_HASH}
@@ -157,17 +159,16 @@ RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
 echo "[changelog DEBUG] Raw response: '${RESPONSE:0:500}'"
 
 # Extract the response text
-ENTRY=$(echo "$RESPONSE" | "$PYTHON" << 'PYEOF'
-import json, sys
+EXTRACT_SCRIPT=$(mktemp /tmp/extract_XXXXXX.py 2>/dev/null || \
+  "$PYTHON" -c "import tempfile; f=tempfile.NamedTemporaryFile(suffix='.py',delete=False); print(f.name.replace('\\\\','/')); f.close()")
+
+cat > "$EXTRACT_SCRIPT" << 'PYEOF'
+import json, sys, re
 try:
     data = json.load(sys.stdin)
     response = data.get('response', '').strip()
     if not response:
-        # Qwen3 put output in thinking field — extract it
         thinking = data.get('thinking', '').strip()
-        # The actual answer is after the thinking process
-        # Look for the entry format starting with ##
-        import re
         match = re.search(r'(## \[.*)', thinking, re.DOTALL)
         if match:
             response = match.group(1).strip()
@@ -175,7 +176,9 @@ try:
 except Exception as e:
     print('')
 PYEOF
-)
+
+ENTRY=$(echo "$RESPONSE" | "$PYTHON" "$EXTRACT_SCRIPT")
+rm -f "$EXTRACT_SCRIPT"
 # DEBUG — remove after testing
 echo "[changelog DEBUG] Raw entry: '${ENTRY:0:200}'"
 
