@@ -74,8 +74,14 @@ fi
 # Strip YAML frontmatter, keep body
 SYSTEM_PROMPT=$(awk '/^---/{p++; next} p==2{print}' "$AGENT_FILE")
 
-# ── Build input payload ───────────────────────────────────────
-INPUT_TEXT="=== COMMIT HASH ===
+# ── Build input payload via temp files ───────────────────────
+INPUT_FILE=$(mktemp /tmp/changelog_input_XXXXXX.txt)
+SYSTEM_FILE=$(mktemp /tmp/changelog_system_XXXXXX.txt)
+trap 'rm -f "$TEMP_CHANGELOG" "$INPUT_FILE" "$SYSTEM_FILE"' EXIT
+
+echo "$SYSTEM_PROMPT" > "$SYSTEM_FILE"
+cat > "$INPUT_FILE" <<EOF
+=== COMMIT HASH ===
 ${COMMIT_HASH}
 
 === BRANCH ===
@@ -91,26 +97,40 @@ ${COMMIT_MSG}
 ${FILES_CHANGED}
 
 === DIFF ===
-${DIFF}"
+${DIFF}
+EOF
+
+# Build JSON payload using Python reading from files — no shell escaping issues
+JSON_PAYLOAD=$("$PYTHON" -c "
+import json
+with open('${SYSTEM_FILE}') as f:
+    system = f.read()
+with open('${INPUT_FILE}') as f:
+    prompt = '/no_think\n\n' + f.read()
+payload = {
+    'model': '${OLLAMA_MODEL}',
+    'system': system,
+    'prompt': prompt,
+    'stream': False,
+    'options': {
+        'temperature': 0.4,
+        'num_predict': 1024,
+        'num_ctx': 32768
+    }
+}
+print(json.dumps(payload))
+")
 
 # ── Call Ollama API ───────────────────────────────────────────
-# Use /api/generate with stream:false for clean single response
 RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
   -X POST "$OLLAMA_URL" \
   -H "Content-Type: application/json" \
-  -d "{
-    \"model\": \"${OLLAMA_MODEL}\",
-\"system\": $(echo "$SYSTEM_PROMPT" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
-\"prompt\": $(echo "/no_think\n\n${INPUT_TEXT}" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
-    \"stream\": false,
-\"options\": {
-  \"temperature\": 0.4,
-  \"num_predict\": 1024,
-  \"num_ctx\": 32768
-}") || {
+  -d "$JSON_PAYLOAD") || {
     warn "Ollama API call failed — skipping changelog."
     exit 0
   }
+
+echo "[changelog DEBUG] Raw response: '${RESPONSE:0:500}'"
 
 # Extract the response text
 ENTRY=$(echo "$RESPONSE" | "$PYTHON" -c "
