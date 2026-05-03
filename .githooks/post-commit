@@ -198,10 +198,13 @@ Write the completed review report to: ${REPO_ROOT}/${REPORT_FILE}
 EOF
 
 timeout "$TIMEOUT_SECONDS" claude \
-  --agent "$CLAUDE_ARCH_AGENT" \
+  -p \
   --dangerously-skip-permissions \
-  "$ARCH_PROMPT" > /dev/null 2>&1 || {
-    warn "Architecture review timed out or failed — skipping."
+  --agent "$CLAUDE_AGENT" \
+  "$(cat "$PROMPT_FILE")" \
+  > /tmp/claude_stdout.txt 2>&1 || {
+    warn "Claude review failed — commit recorded anyway."
+    echo "> Claude review failed." > "$REPORT_FILE"
   }
 
   # If Claude didn't write the file, use stdout
@@ -237,10 +240,13 @@ Read it with the Read tool.
 Produce the architecture review report as specified in your agent instructions.
 Write the final report to: ${REPO_ROOT}/${ARCH_REPORT_FILE}"
 
-  timeout "$TIMEOUT_SECONDS" claude --agent "$CLAUDE_ARCH_AGENT" --print \
-    "$ARCH_PROMPT" > /dev/null 2>&1 || {
-      warn "Architecture review timed out or failed — skipping."
-    }
+timeout "$TIMEOUT_SECONDS" claude \
+  -p \
+  --dangerously-skip-permissions \
+  --agent "$CLAUDE_ARCH_AGENT" \
+  "$ARCH_PROMPT" > /dev/null 2>&1 || {
+    warn "Architecture review timed out or failed — skipping."
+  }
 
   if [[ -f "$ARCH_REPORT_FILE" ]] && [[ -s "$ARCH_REPORT_FILE" ]]; then
     echo ""
