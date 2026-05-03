@@ -67,7 +67,9 @@ run_tool() {
 # ── Dependency check ──────────────────────────────────────────
 MISSING_DEPS=()
 for dep in jq claude ruff mypy bandit interrogate pytest; do
-  if ! command -v "$dep" &>/dev/null; then
+  if ! command -v "$dep" &>/dev/null && \
+     ! command -v "${dep}.exe" &>/dev/null && \
+     ! which "$dep" &>/dev/null; then
     MISSING_DEPS+=("$dep")
   fi
 done
