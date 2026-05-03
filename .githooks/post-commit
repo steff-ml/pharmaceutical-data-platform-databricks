@@ -24,8 +24,6 @@ ARCH_REPORT_FILE="${REVIEWS_DIR}/last-arch-review.md"
 CLAUDE_AGENT="de-code-reviewer"
 CLAUDE_ARCH_AGENT="de-arch-reviewer"
 TIMEOUT_SECONDS=120
-ARCH_PROMPT=""        # ← add this
-PROMPT_FILE=""        # ← and this
 
 # ── Colours ───────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -40,27 +38,17 @@ warn() { echo -e "${YELLOW}[review]${NC} $*"; }
 ok()   { echo -e "${GREEN}[review]${NC} $*"; }
 
 # ── Virtual environment activation ───────────────────────────
-# Use the git repo root — works regardless of which shell VS Code uses
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 VENV_PATH="${REPO_ROOT}/.venv/Scripts"
 
-# Convert to Windows-style path for Git Bash running under VS Code
-# VS Code on Windows may pass a different USERPROFILE/HOME
 if [[ -d "$VENV_PATH" ]]; then
   export PATH="${VENV_PATH}:${PATH}"
   hash -r
-  log "Virtual environment activated: ${VENV_PATH}"
-elif [[ -d "${REPO_ROOT}/.venv/bin" ]]; then
-  # Unix-style venv (WSL or Linux)
-  export PATH="${REPO_ROOT}/.venv/bin:${PATH}"
-  hash -r
-  log "Virtual environment activated (unix): ${REPO_ROOT}/.venv/bin"
+  log "Virtual environment activated"
 else
-  warn "No .venv found at ${REPO_ROOT} — tools may not be available"
-  warn "REPO_ROOT=${REPO_ROOT}"
+  warn "No .venv found at repo root — tools may not be available"
 fi
 
-log "PATH contains: $(echo $PATH | tr ':' '\n' | grep -i venv || echo 'no venv in PATH')"
 # ── Dependency check ──────────────────────────────────────────
 MISSING_DEPS=()
 
@@ -131,11 +119,6 @@ fi
 
 # ── Run static analysis tools ─────────────────────────────────
 # Write tool results to a plain text file — no JSON escaping needed
-RUFF="${VENV_PATH}/ruff.exe"
-MYPY="${VENV_PATH}/mypy.exe"
-BANDIT="${VENV_PATH}/bandit.exe"
-INTERROGATE="${VENV_PATH}/interrogate.exe"
-PYTEST="${VENV_PATH}/pytest.exe"
 
 {
   echo "=== BRANCH ==="
@@ -148,34 +131,37 @@ PYTEST="${VENV_PATH}/pytest.exe"
   echo "$DIFF_LINES"
 
   echo "=== RUFF ==="
-"$RUFF" check --output-format=concise $(echo "$COMMITTED_PY") 2>&1 \
-  && echo "EXIT:0" || echo "EXIT:$?"
-
-echo "=== MYPY ==="
-"$MYPY" --ignore-missing-imports --no-error-summary \
-  $(echo "$COMMITTED_PY") 2>&1 \
-  && echo "EXIT:0" || echo "EXIT:$?"
-
-echo "=== BANDIT ==="
-"$BANDIT" -r -ll -q $(echo "$COMMITTED_PY") 2>&1 \
-  && echo "EXIT:0" || echo "EXIT:$?"
-
-echo "=== INTERROGATE ==="
-"$INTERROGATE" --fail-under=70 $(echo "$COMMITTED_PY") 2>&1 \
-  && echo "EXIT:0" || echo "EXIT:$?"
-
-echo "=== PYTEST ==="
-if [[ -d "tests" ]]; then
-  "$PYTEST" tests/ -q --tb=short --no-header 2>&1 \
+  log "Running ruff..."
+  ruff check --output-format=concise $(echo "$COMMITTED_PY") 2>&1 \
     && echo "EXIT:0" || echo "EXIT:$?"
-else
-  echo "No tests/ directory found"
-  echo "EXIT:-1"
-fi
+
+  echo "=== MYPY ==="
+  log "Running mypy..."
+  mypy --ignore-missing-imports --no-error-summary \
+    $(echo "$COMMITTED_PY") 2>&1 \
+    && echo "EXIT:0" || echo "EXIT:$?"
+
+  echo "=== BANDIT ==="
+  log "Running bandit..."
+  bandit -r -ll -q $(echo "$COMMITTED_PY") 2>&1 \
+    && echo "EXIT:0" || echo "EXIT:$?"
+
+  echo "=== INTERROGATE ==="
+  log "Running interrogate..."
+  interrogate --fail-under=70 $(echo "$COMMITTED_PY") 2>&1 \
+    && echo "EXIT:0" || echo "EXIT:$?"
+
+  echo "=== PYTEST ==="
+  log "Running pytest..."
+  if [[ -d "tests" ]]; then
+    pytest tests/ -q --tb=short --no-header 2>&1 \
+      && echo "EXIT:0" || echo "EXIT:$?"
+  else
+    echo "No tests/ directory found"
+    echo "EXIT:-1"
+  fi
+
 } > "$TOOLS_FILE" 2>&1
-# These must be OUTSIDE the {} block to print to terminal
-log "Diff file: ${DIFF_FILE} ($(wc -l < "$DIFF_FILE") lines)"
-log "Tools file: ${TOOLS_FILE} ($(wc -l < "$TOOLS_FILE") lines)"
 
 # ── Run Claude review ─────────────────────────────────────────
 mkdir -p "$REVIEWS_DIR"
@@ -185,44 +171,46 @@ if [[ "$SKIP_CLAUDE" == "true" ]]; then
 # Code Review — $(git rev-parse --abbrev-ref HEAD) @ $(date '+%Y-%m-%d %H:%M')
 
 > ⚠️ Diff too large (${DIFF_LINES} lines) — Claude review skipped. Tools ran only.
+> Consider breaking this commit into smaller, focused changes.
+
+## Tool Results
+See terminal output above for individual tool results.
 
 > Commit recorded. Review is advisory only.
 EOF
+  ok "Tools complete. Claude review skipped (diff too large)."
+
 else
   log "Running Claude review (agent: ${CLAUDE_AGENT})..."
 
-  # Write prompt to file — avoids shell escaping issues with --print
-  PROMPT_FILE=$(mktemp /tmp/review_prompt_XXXXXX.txt)
-  trap 'rm -f "$DIFF_FILE" "$TOOLS_FILE" "$PROMPT_FILE"' EXIT
+  PROMPT="You are the de-code-reviewer agent. Review the following code change.
 
-  cat > "$PROMPT_FILE" <<EOF
-Review the code change described below.
+## Diff
+The git diff is in: ${DIFF_FILE}
+Read it with the Read tool.
 
-Read the diff from this file: ${DIFF_FILE}
-Read the tool results from this file: ${TOOLS_FILE}
+## Tool Results
+The tool output is in: ${TOOLS_FILE}
+Read it with the Read tool.
 
-The tools file uses === SECTION === headers. EXIT:0 = passed, EXIT:1+ = failed, EXIT:-1 = skipped.
+The tools file uses === SECTION === headers to separate each tool's output.
+EXIT:0 means the tool passed. EXIT:1 or higher means it failed. EXIT:-1 means skipped.
 
-Write the completed review report to: ${REPO_ROOT}/${REPORT_FILE}
-EOF
+Produce the review report as specified in your agent instructions.
+Write the final report to: ${REPO_ROOT}/${REPORT_FILE}"
 
-# Read the agent definition to use as system prompt
-AGENT_FILE="${REPO_ROOT}/.claude/agents/de-code-reviewer.md"
-# Strip YAML frontmatter (between --- markers), keep only the body
-AGENT_SYSTEM=$(awk '/^---/{p++; next} p==2{print}' "$AGENT_FILE")
+  timeout "$TIMEOUT_SECONDS" claude --agent "$CLAUDE_AGENT" --print "$PROMPT" \
+    > /tmp/claude_review_output.txt 2>&1 || {
+      warn "Claude review timed out or failed — commit recorded anyway."
+      echo "> Claude review failed. Tools ran successfully." > "$REPORT_FILE"
+    }
 
-timeout "$TIMEOUT_SECONDS" claude \
-  -p \
-  --dangerously-skip-permissions \
-  --system-prompt "$AGENT_SYSTEM" \
-  "$(cat "$PROMPT_FILE")" \
-  > /tmp/claude_stdout.txt 2>&1 || {
-    warn "Claude review failed — commit recorded anyway."
-    echo "> Claude review failed." > "$REPORT_FILE"
-  }
-  # If Claude didn't write the file, use stdout
-  if [[ ! -s "$REPORT_FILE" ]]; then
-    cp /tmp/claude_stdout.txt "$REPORT_FILE"
+  # Claude writes the report itself via the Write tool
+  # If it didn't, fall back to its stdout output
+  if [[ ! -f "$REPORT_FILE" ]] || [[ ! -s "$REPORT_FILE" ]]; then
+    if [[ -s /tmp/claude_review_output.txt ]]; then
+      cp /tmp/claude_review_output.txt "$REPORT_FILE"
+    fi
   fi
 fi
 
@@ -253,16 +241,10 @@ Read it with the Read tool.
 Produce the architecture review report as specified in your agent instructions.
 Write the final report to: ${REPO_ROOT}/${ARCH_REPORT_FILE}"
 
-ARCH_AGENT_FILE="${REPO_ROOT}/.claude/agents/de-arch-reviewer.md"
-ARCH_SYSTEM=$(awk '/^---/{p++; next} p==2{print}' "$ARCH_AGENT_FILE")
-
-timeout "$TIMEOUT_SECONDS" claude \
-  -p \
-  --dangerously-skip-permissions \
-  --system-prompt "$ARCH_SYSTEM" \
-  "$ARCH_PROMPT" > /dev/null 2>&1 || {
-    warn "Architecture review timed out or failed — skipping."
-  }
+  timeout "$TIMEOUT_SECONDS" claude --agent "$CLAUDE_ARCH_AGENT" --print \
+    "$ARCH_PROMPT" > /dev/null 2>&1 || {
+      warn "Architecture review timed out or failed — skipping."
+    }
 
   if [[ -f "$ARCH_REPORT_FILE" ]] && [[ -s "$ARCH_REPORT_FILE" ]]; then
     echo ""
@@ -271,6 +253,12 @@ timeout "$TIMEOUT_SECONDS" claude \
     echo "──────────────────────────────────────────────"
     ok "Architecture report saved to ${ARCH_REPORT_FILE}"
   fi
+fi
+
+# ── Run changelog writer ─────────────────────────────────────
+CHANGELOG_SCRIPT="${REPO_ROOT}/.githooks/changelog-writer"
+if [[ -f "$CHANGELOG_SCRIPT" ]]; then
+  bash "$CHANGELOG_SCRIPT" || warn "Changelog writer failed — commit recorded anyway."
 fi
 
 # ── Done ──────────────────────────────────────────────────────

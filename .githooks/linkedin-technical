@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# .githooks/linkedin-technical
+# ─────────────────────────────────────────────────────────────
+# Generates a technical audience LinkedIn post from CHANGELOG.md.
+# Uses Qwen via Ollama. Run manually when ready to post.
+#
+# Usage:
+#   bash .githooks/linkedin-technical              # last 2 weeks
+#   bash .githooks/linkedin-technical --days 7     # last 7 days
+#   bash .githooks/linkedin-technical --all        # full changelog
+#   bash .githooks/linkedin-technical --category Infrastructure
+# ─────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+OLLAMA_URL="http://localhost:11434/api/generate"
+OLLAMA_MODEL="qwen3.5:9b-32k"
+CHANGELOG_FILE="CHANGELOG.md"
+AGENT_FILE=".opencode/agents/de-linkedin-technical.md"
+TIMEOUT_SECONDS=180
+POSTS_DIR=".posts"
+DAYS=14
+CATEGORY=""
+
+# ── Parse args ────────────────────────────────────────────────
+USE_ALL=false
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --days)     DAYS="$2"; shift 2 ;;
+    --all)      USE_ALL=true; shift ;;
+    --category) CATEGORY="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+# ── Colours ───────────────────────────────────────────────────
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log()  { echo -e "${BLUE}[linkedin-technical]${NC} $*"; }
+warn() { echo -e "${YELLOW}[linkedin-technical]${NC} $*"; }
+ok()   { echo -e "${GREEN}[linkedin-technical]${NC} $*"; }
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# ── Checks ────────────────────────────────────────────────────
+if [[ ! -f "$CHANGELOG_FILE" ]]; then
+  warn "CHANGELOG.md not found — commit some changes first."
+  exit 1
+fi
+
+if ! curl -s --max-time 3 "$OLLAMA_URL" > /dev/null 2>&1; then
+  warn "Ollama not reachable at ${OLLAMA_URL}"
+  warn "Start with: ollama serve"
+  exit 1
+fi
+
+if [[ ! -f "$AGENT_FILE" ]]; then
+  warn "Agent file not found: ${AGENT_FILE}"
+  exit 1
+fi
+
+# ── Filter changelog ──────────────────────────────────────────
+CHANGELOG_CONTENT=$(python3 - <<EOF
+import re
+from datetime import datetime, timedelta
+
+with open("${CHANGELOG_FILE}") as f:
+    content = f.read()
+
+use_all = "${USE_ALL}" == "true"
+days = int("${DAYS}")
+category_filter = "${CATEGORY}".strip()
+
+cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+entries = re.split(r'\n---\n', content)
+filtered = []
+
+for entry in entries:
+    # Date filter
+    if not use_all:
+        date_match = re.search(r'— (\d{4}-\d{2}-\d{2})', entry)
+        if not date_match or date_match.group(1) < cutoff:
+            continue
+
+    # Category filter
+    if category_filter:
+        cat_match = re.search(r'### Category\s*\n(\w+)', entry)
+        if not cat_match or cat_match.group(1).lower() != category_filter.lower():
+            continue
+
+    filtered.append(entry)
+
+print('\n---\n'.join(filtered) if filtered else "No matching entries found.")
+EOF
+)
+
+if [[ -z "$CHANGELOG_CONTENT" ]] || [[ "$CHANGELOG_CONTENT" == "No matching entries found." ]]; then
+  warn "No changelog entries matched your filters."
+  [[ -n "$CATEGORY" ]] && warn "Category filter: ${CATEGORY}"
+  warn "Try --all, --days 30, or remove --category"
+  exit 0
+fi
+
+ENTRY_COUNT=$(echo "$CHANGELOG_CONTENT" | grep -c "^## \[" || true)
+log "Found ${ENTRY_COUNT} matching entries"
+[[ -n "$CATEGORY" ]] && log "Category filter: ${CATEGORY}"
+
+# ── Read agent system prompt ──────────────────────────────────
+SYSTEM_PROMPT=$(awk '/^---/{p++; next} p==2{print}' "$AGENT_FILE")
+
+# ── Call Ollama ───────────────────────────────────────────────
+log "Generating technical LinkedIn post..."
+
+RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
+  -X POST "$OLLAMA_URL" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"${OLLAMA_MODEL}\",
+    \"system\": $(echo "$SYSTEM_PROMPT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+    \"prompt\": $(echo "Write a technical LinkedIn post based on these changelog entries:\n\n${CHANGELOG_CONTENT}" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+    \"stream\": false,
+    \"options\": {
+      \"temperature\": 0.5,
+      \"num_predict\": 2048
+    }
+  }") || {
+    warn "Ollama API call failed."
+    exit 1
+  }
+
+POST=$(echo "$RESPONSE" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    print(data.get('response', '').strip())
+except:
+    print('')
+")
+
+if [[ -z "$POST" ]] || [[ "$POST" == NO_POST* ]]; then
+  warn "Agent returned no post: ${POST:-empty response}"
+  exit 0
+fi
+
+# ── Save and display ──────────────────────────────────────────
+mkdir -p "$POSTS_DIR"
+TIMESTAMP=$(date '+%Y-%m-%d_%H-%M')
+POST_FILE="${POSTS_DIR}/linkedin-technical-${TIMESTAMP}.md"
+
+{
+  echo "# LinkedIn Post — Technical Audience"
+  echo "**Generated:** ${TIMESTAMP}"
+  echo "**Model:** ${OLLAMA_MODEL}"
+  [[ -n "$CATEGORY" ]] && echo "**Category filter:** ${CATEGORY}"
+  echo ""
+  echo "---"
+  echo ""
+  echo "$POST"
+} > "$POST_FILE"
+
+echo ""
+echo "══════════════════════════════════════════════"
+echo "$POST"
+echo "══════════════════════════════════════════════"
+echo ""
+ok "Post saved to ${POST_FILE}"

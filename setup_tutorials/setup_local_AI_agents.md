@@ -171,6 +171,29 @@ TUI not responding — Switch to Windows Terminal. The default WSL or PowerShell
 
 ## Installing support agents
 
-### Review agents (Claude Code)
+### Documentation agents
+#### How Qwen documentation agents work (TO UPDATE)
+Qwen documentation agents are designed to support maintenance of the documentation and provide raw materials for my content strategy, directly from my Git changes
+Three documentation agents are available in .opencode/agents/:
+- de-changelog-writer — invoked automatically by post-commit hook. Writes all changes to a log for later use in content.   
+- de-linkedin-general — run manually before PRs or when refactoring
+- de-linkedin-technical — run manually before releases, requires docs/business-case.md
+
+These agents share certain capabilities.
+To enable this, three skills are defined in .opencode/skills:
+- changelog-format: 
+  Defines the CHANGELOG.md structure used by the changelog writer and consumed
+  by the LinkedIn post agents. Load this skill whenever reading or writing
+  CHANGELOG.md to ensure consistent structure across all agents.
 
 
+To run agents based on Git actions, .githooks are defined. changelog-writer is triggered on post commit.
+The others are manually run using the following hooks in Git Bash:
+
+```bash
+bash .githooks/linkedin-general              # general audience
+bash .githooks/linkedin-technical            # technical audience
+bash .githooks/linkedin-technical --category Infrastructure  # filter by type
+bash .githooks/linkedin-technical --days 7   # last 7 days only
+
+```
