@@ -110,7 +110,7 @@ if [[ -z "$STAGED_PY" ]]; then
 fi
 
 # ── Diff size check ───────────────────────────────────────────
-DIFF=$(git diff HEAD~1 HEAD -- $(echo "$STAGED_PY")) | wc -l | tr -d ' ')
+DIFF=$(git diff HEAD~1 HEAD -- $(echo "$STAGED_PY"))
 DIFF_LINES=$(git diff HEAD~1 HEAD -- $(echo "$STAGED_PY") | wc -l | tr -d ' ')
 
 log "Diff size: ${DIFF_LINES} lines"
