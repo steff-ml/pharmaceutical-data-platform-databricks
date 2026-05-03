@@ -76,10 +76,12 @@ SYSTEM_PROMPT=$(awk '/^---/{p++; next} p==2{print}' "$AGENT_FILE")
 
 # ── Build input payload via temp files ───────────────────────
 # Use TMPDIR — works on Windows Git Bash unlike /tmp
-INPUT_FILE=$(mktemp /tmp/changelog_input_XXXXXX.txt)
-SYSTEM_FILE=$(mktemp /tmp/changelog_system_XXXXXX.txt)
-TEMP_CHANGELOG=$(mktemp /tmp/changelog_XXXXXX.md)
+PYTHON_TMPDIR=$("$PYTHON" -c "import tempfile; print(tempfile.gettempdir())")
+INPUT_FILE=$("$PYTHON" -c "import tempfile; f=tempfile.NamedTemporaryFile(suffix='.txt', delete=False, dir='${PYTHON_TMPDIR}'); print(f.name); f.close()")
+SYSTEM_FILE=$("$PYTHON" -c "import tempfile; f=tempfile.NamedTemporaryFile(suffix='.txt', delete=False, dir='${PYTHON_TMPDIR}'); print(f.name); f.close()")
+TEMP_CHANGELOG=$("$PYTHON" -c "import tempfile; f=tempfile.NamedTemporaryFile(suffix='.md', delete=False, dir='${PYTHON_TMPDIR}'); print(f.name); f.close()")
 trap 'rm -f "$TEMP_CHANGELOG" "$INPUT_FILE" "$SYSTEM_FILE"' EXIT
+
 # DEBUG — check what paths bash and python see
 echo "[changelog DEBUG] SYSTEM_FILE bash path: ${SYSTEM_FILE}"
 echo "[changelog DEBUG] Python sees tmp as: $("$PYTHON" -c "import tempfile; print(tempfile.gettempdir())")"
