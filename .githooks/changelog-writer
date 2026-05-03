@@ -76,11 +76,26 @@ SYSTEM_PROMPT=$(awk '/^---/{p++; next} p==2{print}' "$AGENT_FILE")
 
 # ── Build input payload via temp files ───────────────────────
 # Use TMPDIR — works on Windows Git Bash unlike /tmp
-PYTHON_TMPDIR=$("$PYTHON" -c "import tempfile; print(tempfile.gettempdir())")
-INPUT_FILE=$("$PYTHON" -c "import tempfile; f=tempfile.NamedTemporaryFile(suffix='.txt', delete=False, dir='${PYTHON_TMPDIR}'); print(f.name); f.close()")
-SYSTEM_FILE=$("$PYTHON" -c "import tempfile; f=tempfile.NamedTemporaryFile(suffix='.txt', delete=False, dir='${PYTHON_TMPDIR}'); print(f.name); f.close()")
-TEMP_CHANGELOG=$("$PYTHON" -c "import tempfile; f=tempfile.NamedTemporaryFile(suffix='.md', delete=False, dir='${PYTHON_TMPDIR}'); print(f.name); f.close()")
+TEMP_SETUP=$("$PYTHON" << 'PYEOF'
+import tempfile, json
+tmpdir = tempfile.gettempdir()
+files = {}
+for name in ['input', 'system', 'changelog']:
+    f = tempfile.NamedTemporaryFile(
+        suffix='.txt', delete=False, dir=tmpdir
+    )
+    files[name] = f.name.replace('\\', '/')
+    f.close()
+print(json.dumps(files))
+PYEOF
+)
+
+INPUT_FILE=$("$PYTHON" -c "import json,sys; print(json.loads('${TEMP_SETUP}')['input'])")
+SYSTEM_FILE=$("$PYTHON" -c "import json,sys; print(json.loads('${TEMP_SETUP}')['system'])")
+TEMP_CHANGELOG=$("$PYTHON" -c "import json,sys; print(json.loads('${TEMP_SETUP}')['changelog'])")
 trap 'rm -f "$TEMP_CHANGELOG" "$INPUT_FILE" "$SYSTEM_FILE"' EXIT
+
+echo "[changelog DEBUG] SYSTEM_FILE: ${SYSTEM_FILE}"
 
 # DEBUG — check what paths bash and python see
 echo "[changelog DEBUG] SYSTEM_FILE bash path: ${SYSTEM_FILE}"
