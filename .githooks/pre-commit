@@ -31,10 +31,23 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+
 # ── Helpers ───────────────────────────────────────────────────
 log()  { echo -e "${BLUE}[review]${NC} $*"; }
 warn() { echo -e "${YELLOW}[review]${NC} $*"; }
 ok()   { echo -e "${GREEN}[review]${NC} $*"; }
+
+# ── Virtual environment activation ───────────────────────────
+# Or relative to repo root, which is more portable:
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+VENV_PATH="${REPO_ROOT}/.venv/Scripts"
+
+if [[ -d "$VENV_PATH" ]]; then
+  export PATH="$VENV_PATH:$PATH"
+  log "Virtual environment activated: $VENV_PATH"
+else
+  warn "Virtual environment not found at $VENV_PATH"
+fi
 
 # Safely capture tool output — never fail the hook if a tool is missing
 run_tool() {
