@@ -101,13 +101,13 @@ RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
   -d "{
     \"model\": \"${OLLAMA_MODEL}\",
 \"system\": $(echo "$SYSTEM_PROMPT" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
-\"prompt\": $(echo "$INPUT_TEXT" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+\"prompt\": $(echo "/no_think\n\n${INPUT_TEXT}" | "$PYTHON" -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
     \"stream\": false,
-    \"options\": {
-      \"temperature\": 0.3,
-      \"num_predict\": 1024
-    }
-  }") || {
+\"options\": {
+  \"temperature\": 0.4,
+  \"num_predict\": 1024,
+  \"num_ctx\": 32768
+}") || {
     warn "Ollama API call failed — skipping changelog."
     exit 0
   }
@@ -121,6 +121,8 @@ try:
 except Exception as e:
     print('')
 ")
+# DEBUG — remove after testing
+echo "[changelog DEBUG] Raw entry: '${ENTRY:0:200}'"
 
 # ── Check for SKIP signal ─────────────────────────────────────
 if [[ "$ENTRY" == "SKIP" ]] || [[ -z "$ENTRY" ]]; then
