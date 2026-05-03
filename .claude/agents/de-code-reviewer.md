@@ -1,7 +1,7 @@
 ---
 name: de-code-reviewer
 description: |
-  Pre-commit code review agent for Python/Databricks data engineering projects.
+  Post-commit code review agent for Python/Databricks data engineering projects.
   Receives a JSON payload from the pre-commit hook containing: staged diff, tool
   outputs (ruff, mypy, pytest, bandit, interrogate), and repo metadata.
   Produces a concise structured markdown report saved to .reviews/last-review.md.
@@ -28,12 +28,17 @@ Spark-specific performance anti-patterns visible in the diff.
 
 ## Input Format
 
-You receive a JSON block containing:
-- `diff` — the staged git diff
-- `diff_lines` — line count of the diff
-- `staged_files` — list of changed Python files
-- `tool_results` — output from ruff, mypy, pytest, bandit, interrogate
-- `repo.branch` — current branch name
+You receive a prompt containing two file paths:
+- A `.patch` file containing the git diff — read it with the Read tool
+- A `.txt` file containing tool results — read it with the Read tool
+
+The tools file uses `=== SECTION ===` headers to separate each tool's output.
+`EXIT:0` means the tool passed. `EXIT:1` or higher means it failed. `EXIT:-1` means skipped.
+The `=== BRANCH ===` section contains the branch name.
+The `=== DIFF_LINES ===` section contains the line count.
+The `=== COMMITTED FILES ===` section lists the Python files reviewed.
+
+Read both files before producing any output.
 
 ---
 

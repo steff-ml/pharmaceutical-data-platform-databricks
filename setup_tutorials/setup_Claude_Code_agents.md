@@ -49,7 +49,7 @@ pip install pyspark-stubs
 
 ```powershell
 git config core.hooksPath .githooks
-icacls .githooks\pre-commit /grant "*S-1-1-0:RX" 
+icacls .githooks\post-commit /grant "*S-1-1-0:RX" 
 ```
 icacls is for permission handling in powershell, the equivalent of chmod in Bash
 #### 3. Add a mypy config (recommended)
