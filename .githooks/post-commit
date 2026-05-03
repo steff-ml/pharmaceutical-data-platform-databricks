@@ -162,6 +162,9 @@ fi
   fi
 
 } > "$TOOLS_FILE" 2>&1
+# These must be OUTSIDE the {} block to print to terminal
+log "Diff file: ${DIFF_FILE} ($(wc -l < "$DIFF_FILE") lines)"
+log "Tools file: ${TOOLS_FILE} ($(wc -l < "$TOOLS_FILE") lines)"
 
 # ── Run Claude review ─────────────────────────────────────────
 mkdir -p "$REVIEWS_DIR"
@@ -171,46 +174,37 @@ if [[ "$SKIP_CLAUDE" == "true" ]]; then
 # Code Review — $(git rev-parse --abbrev-ref HEAD) @ $(date '+%Y-%m-%d %H:%M')
 
 > ⚠️ Diff too large (${DIFF_LINES} lines) — Claude review skipped. Tools ran only.
-> Consider breaking this commit into smaller, focused changes.
-
-## Tool Results
-See terminal output above for individual tool results.
 
 > Commit recorded. Review is advisory only.
 EOF
-  ok "Tools complete. Claude review skipped (diff too large)."
-
 else
   log "Running Claude review (agent: ${CLAUDE_AGENT})..."
 
-  PROMPT="You are the de-code-reviewer agent. Review the following code change.
+  # Write prompt to file — avoids shell escaping issues with --print
+  PROMPT_FILE=$(mktemp /tmp/review_prompt_XXXXXX.txt)
+  trap 'rm -f "$DIFF_FILE" "$TOOLS_FILE" "$PROMPT_FILE"' EXIT
 
-## Diff
-The git diff is in: ${DIFF_FILE}
-Read it with the Read tool.
+  cat > "$PROMPT_FILE" <<EOF
+Review the code change described below.
 
-## Tool Results
-The tool output is in: ${TOOLS_FILE}
-Read it with the Read tool.
+Read the diff from this file: ${DIFF_FILE}
+Read the tool results from this file: ${TOOLS_FILE}
 
-The tools file uses === SECTION === headers to separate each tool's output.
-EXIT:0 means the tool passed. EXIT:1 or higher means it failed. EXIT:-1 means skipped.
+The tools file uses === SECTION === headers. EXIT:0 = passed, EXIT:1+ = failed, EXIT:-1 = skipped.
 
-Produce the review report as specified in your agent instructions.
-Write the final report to: ${REPO_ROOT}/${REPORT_FILE}"
+Write the completed review report to: ${REPO_ROOT}/${REPORT_FILE}
+EOF
 
-  timeout "$TIMEOUT_SECONDS" claude --agent "$CLAUDE_AGENT" --print "$PROMPT" \
-    > /tmp/claude_review_output.txt 2>&1 || {
-      warn "Claude review timed out or failed — commit recorded anyway."
-      echo "> Claude review failed. Tools ran successfully." > "$REPORT_FILE"
-    }
+timeout "$TIMEOUT_SECONDS" claude \
+  --agent "$CLAUDE_ARCH_AGENT" \
+  --dangerously-skip-permissions \
+  "$ARCH_PROMPT" > /dev/null 2>&1 || {
+    warn "Architecture review timed out or failed — skipping."
+  }
 
-  # Claude writes the report itself via the Write tool
-  # If it didn't, fall back to its stdout output
-  if [[ ! -f "$REPORT_FILE" ]] || [[ ! -s "$REPORT_FILE" ]]; then
-    if [[ -s /tmp/claude_review_output.txt ]]; then
-      cp /tmp/claude_review_output.txt "$REPORT_FILE"
-    fi
+  # If Claude didn't write the file, use stdout
+  if [[ ! -s "$REPORT_FILE" ]]; then
+    cp /tmp/claude_stdout.txt "$REPORT_FILE"
   fi
 fi
 
