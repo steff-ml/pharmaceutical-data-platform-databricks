@@ -80,7 +80,10 @@ INPUT_FILE=$(mktemp /tmp/changelog_input_XXXXXX.txt)
 SYSTEM_FILE=$(mktemp /tmp/changelog_system_XXXXXX.txt)
 TEMP_CHANGELOG=$(mktemp /tmp/changelog_XXXXXX.md)
 trap 'rm -f "$TEMP_CHANGELOG" "$INPUT_FILE" "$SYSTEM_FILE"' EXIT
-
+# DEBUG — check what paths bash and python see
+echo "[changelog DEBUG] SYSTEM_FILE bash path: ${SYSTEM_FILE}"
+echo "[changelog DEBUG] Python sees tmp as: $("$PYTHON" -c "import tempfile; print(tempfile.gettempdir())")"
+echo "[changelog DEBUG] File exists in bash: $(test -f "$SYSTEM_FILE" && echo YES || echo NO)"
 
 echo "$SYSTEM_PROMPT" > "$SYSTEM_FILE"
 cat > "$INPUT_FILE" <<EOF
