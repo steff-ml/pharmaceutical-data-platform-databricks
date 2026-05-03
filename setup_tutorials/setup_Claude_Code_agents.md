@@ -88,6 +88,13 @@ Option B — commit reports alongside code (useful for audit trail):
 Option A is selected for clean history. The reviews are for me.
 ---
 
+#### 5. Download jq
+Option 2 — Manual download (if curl isn't available):
+
+Go to https://github.com/jqlang/jq/releases/latest
+Download jq-windows-amd64.exe
+Rename it to jq.exe
+Move it to C:\Program Files\Git\usr\bin\
 ### Customising the agent
 
 Open `.claude/agents/de-code-reviewer.md` to:
