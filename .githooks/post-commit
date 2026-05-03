@@ -95,24 +95,24 @@ if [[ ${#MISSING_DEPS[@]} -gt 0 ]]; then
   warn "Skipping review — commit proceeding anyway."
   exit 0
 fi
-# ── Gather staged Python files ────────────────────────────────
-STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+# ── Gather committed Python files ────────────────────────────
+STAGED_PY=$(git diff HEAD~1 HEAD --name-only --diff-filter=ACM 2>/dev/null | grep '\.py$' || true)
 
-# Fallback for VS Code which may commit without explicit staging
+# Fallback for first commit (no HEAD~1 exists)
 if [[ -z "$STAGED_PY" ]]; then
-  STAGED_PY=$(git diff HEAD --name-only --diff-filter=ACM 2>/dev/null | grep '\.py$' || true)
+  STAGED_PY=$(git diff --name-only --diff-filter=ACM \
+    $(git rev-list --max-parents=0 HEAD) HEAD 2>/dev/null | grep '\.py$' || true)
 fi
 
 if [[ -z "$STAGED_PY" ]]; then
-  ok "No Python files staged — skipping review."
+  ok "No Python files in last commit — skipping review."
   exit 0
 fi
 
-log "Staged Python files:"
-echo "$STAGED_PY" | sed 's/^/  /'
-
 # ── Diff size check ───────────────────────────────────────────
-DIFF_LINES=$(git diff --cached -- $(echo "$STAGED_PY") | wc -l | tr -d ' ')
+DIFF=$(git diff HEAD~1 HEAD -- $(echo "$STAGED_PY")) | wc -l | tr -d ' ')
+DIFF_LINES=$(git diff HEAD~1 HEAD -- $(echo "$STAGED_PY") | wc -l | tr -d ' ')
+
 log "Diff size: ${DIFF_LINES} lines"
 
 if (( DIFF_LINES > DIFF_SKIP_THRESHOLD )); then
