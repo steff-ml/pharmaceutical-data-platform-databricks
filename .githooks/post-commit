@@ -197,16 +197,20 @@ The tools file uses === SECTION === headers. EXIT:0 = passed, EXIT:1+ = failed, 
 Write the completed review report to: ${REPO_ROOT}/${REPORT_FILE}
 EOF
 
+# Read the agent definition to use as system prompt
+AGENT_FILE="${REPO_ROOT}/.claude/agents/de-code-reviewer.md"
+# Strip YAML frontmatter (between --- markers), keep only the body
+AGENT_SYSTEM=$(awk '/^---/{p++; next} p==2{print}' "$AGENT_FILE")
+
 timeout "$TIMEOUT_SECONDS" claude \
   -p \
   --dangerously-skip-permissions \
-  --agent "$CLAUDE_AGENT" \
+  --system-prompt "$AGENT_SYSTEM" \
   "$(cat "$PROMPT_FILE")" \
   > /tmp/claude_stdout.txt 2>&1 || {
     warn "Claude review failed — commit recorded anyway."
     echo "> Claude review failed." > "$REPORT_FILE"
   }
-
   # If Claude didn't write the file, use stdout
   if [[ ! -s "$REPORT_FILE" ]]; then
     cp /tmp/claude_stdout.txt "$REPORT_FILE"
@@ -240,10 +244,13 @@ Read it with the Read tool.
 Produce the architecture review report as specified in your agent instructions.
 Write the final report to: ${REPO_ROOT}/${ARCH_REPORT_FILE}"
 
+ARCH_AGENT_FILE="${REPO_ROOT}/.claude/agents/de-arch-reviewer.md"
+ARCH_SYSTEM=$(awk '/^---/{p++; next} p==2{print}' "$ARCH_AGENT_FILE")
+
 timeout "$TIMEOUT_SECONDS" claude \
   -p \
   --dangerously-skip-permissions \
-  --agent "$CLAUDE_ARCH_AGENT" \
+  --system-prompt "$ARCH_SYSTEM" \
   "$ARCH_PROMPT" > /dev/null 2>&1 || {
     warn "Architecture review timed out or failed — skipping."
   }
