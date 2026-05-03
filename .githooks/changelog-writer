@@ -129,12 +129,13 @@ import json
 with open('${SYSTEM_FILE}') as f:
     system = f.read()
 with open('${INPUT_FILE}') as f:
-    prompt = '/no_think\n\n' + f.read()
+    prompt = f.read()
 payload = {
     'model': '${OLLAMA_MODEL}',
     'system': system,
     'prompt': prompt,
     'stream': False,
+    'think': False,         
     'options': {
         'temperature': 0.4,
         'num_predict': 1024,
@@ -156,14 +157,25 @@ RESPONSE=$(curl -s --max-time "$TIMEOUT_SECONDS" \
 echo "[changelog DEBUG] Raw response: '${RESPONSE:0:500}'"
 
 # Extract the response text
-ENTRY=$(echo "$RESPONSE" | "$PYTHON" -c "
+ENTRY=$(echo "$RESPONSE" | "$PYTHON" << 'PYEOF'
 import json, sys
 try:
     data = json.load(sys.stdin)
-    print(data.get('response', '').strip())
+    response = data.get('response', '').strip()
+    if not response:
+        # Qwen3 put output in thinking field — extract it
+        thinking = data.get('thinking', '').strip()
+        # The actual answer is after the thinking process
+        # Look for the entry format starting with ##
+        import re
+        match = re.search(r'(## \[.*)', thinking, re.DOTALL)
+        if match:
+            response = match.group(1).strip()
+    print(response)
 except Exception as e:
     print('')
-")
+PYEOF
+)
 # DEBUG — remove after testing
 echo "[changelog DEBUG] Raw entry: '${ENTRY:0:200}'"
 
