@@ -24,6 +24,8 @@ ARCH_REPORT_FILE="${REVIEWS_DIR}/last-arch-review.md"
 CLAUDE_AGENT="de-code-reviewer"
 CLAUDE_ARCH_AGENT="de-arch-reviewer"
 TIMEOUT_SECONDS=120
+ARCH_PROMPT=""        # ← add this
+PROMPT_FILE=""        # ← and this
 
 # ── Colours ───────────────────────────────────────────────────
 RED='\033[0;31m'
